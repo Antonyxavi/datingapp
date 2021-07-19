@@ -13,6 +13,7 @@ export class MemberDetailComponent implements OnInit {
   member!: Member;
   galleryOptions!: NgxGalleryOptions[];
   galleryImages!: NgxGalleryImage[];
+  editForm: any;
 
   constructor(private memberService:MembersService,private route:ActivatedRoute) { }
 
