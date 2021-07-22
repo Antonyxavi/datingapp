@@ -1,6 +1,6 @@
 @import '~font-awesome/css/font-awesome.css';
 @import '~bootswatch/dist/United/bootstrap.css';
-
+@import '~ngx-bootstrap/datepicker/bs-datepicker.css';
 
 
 .tab-panel {
