@@ -42,6 +42,9 @@ register(model:any)
 
 setCurrentUser(user: User) {
   if (Object.keys(user).length !== 0) {
+    user.roles=[];
+    const roles = this.getDecodedToken(user.token).role;
+    Array.isArray(roles) ? user.roles = roles:user.roles.push(roles);
     localStorage.setItem('user', JSON.stringify(user));
     this.currentUserSource.next(user);
   }
@@ -53,5 +56,10 @@ setCurrentUser(user: User) {
     localStorage.removeItem('user');
   //this.currentUserSource = JSON.parse(localStorage.getItem('user') || '{}');
     this.currentUserSource.next(null!);
+  }
+
+  getDecodedToken(token)
+  {
+    return JSON.parse(atob(token.split('.')[1]));
   }
 }
