@@ -14,12 +14,13 @@ namespace API.SignalR
     {
         private readonly IMapper _mapper;
         private readonly IHubContext<PresenceHub> _presenceHub;
-        private readonly PresenceTracker _presenceTracker;
+        private readonly PresenceTracker _tracker;
         private readonly IUnitOfWork _unitOfWork;
-        public MessageHub(IMapper mapper, IHubContext<PresenceHub> presenceHub, PresenceTracker presenceTracker, IUnitOfWork unitOfWork)
+        public MessageHub(IMapper mapper, IUnitOfWork unitOfWork, IHubContext<PresenceHub> presenceHub,
+            PresenceTracker tracker)
         {
             _unitOfWork = unitOfWork;
-            _presenceTracker = presenceTracker;
+            _tracker = tracker;
             _presenceHub = presenceHub;
             _mapper = mapper;
         }
@@ -33,10 +34,10 @@ namespace API.SignalR
             var group = await AddToGroup(groupName);
             await Clients.Group(groupName).SendAsync("UpdatedGroup", group);
 
+            var messages = await _unitOfWork.MessageRepository.
+                GetMessageThread(Context.User.GetUsername(), otherUser);
 
-            var messages = await _unitOfWork.MessageRepository.GetMessageThread(Context.User.GetUsername(), otherUser);
-
-            if(_unitOfWork.HasChanges()) await _unitOfWork.Complete();
+            if (_unitOfWork.HasChanges()) await _unitOfWork.Complete();
 
             await Clients.Caller.SendAsync("ReceiveMessageThread", messages);
         }
@@ -53,12 +54,12 @@ namespace API.SignalR
             var username = Context.User.GetUsername();
 
             if (username == createMessageDto.RecipientUsername.ToLower())
-                throw new HubException("You cannot send message to yourself");
+                throw new HubException("You cannot send messages to yourself");
 
             var sender = await _unitOfWork.UserRepository.GetUserByUsernameAsync(username);
             var recipient = await _unitOfWork.UserRepository.GetUserByUsernameAsync(createMessageDto.RecipientUsername);
 
-            if (recipient == null) throw new HubException("not found user");
+            if (recipient == null) throw new HubException("Not found user");
 
             var message = new Message
             {
@@ -77,14 +78,13 @@ namespace API.SignalR
             {
                 message.DateRead = DateTime.UtcNow;
             }
-
             else
             {
-                var connections = await _presenceTracker.GetConnectionsForUser(recipient.UserName);
+                var connections = await _tracker.GetConnectionsForUser(recipient.UserName);
                 if (connections != null)
                 {
-                    await _presenceHub.Clients.Clients(connections).SendAsync("NewMessageRecived",
-                    new { username = sender.UserName, knownAs = sender.KnownAs });
+                    await _presenceHub.Clients.Clients(connections).SendAsync("NewMessageReceived",
+                        new { username = sender.UserName, knownAs = sender.KnownAs });
                 }
             }
 
@@ -92,7 +92,6 @@ namespace API.SignalR
 
             if (await _unitOfWork.Complete())
             {
-
                 await Clients.Group(groupName).SendAsync("NewMessage", _mapper.Map<MessageDto>(message));
             }
         }
@@ -121,6 +120,7 @@ namespace API.SignalR
             var connection = group.Connections.FirstOrDefault(x => x.ConnectionId == Context.ConnectionId);
             _unitOfWork.MessageRepository.RemoveConnection(connection);
             if (await _unitOfWork.Complete()) return group;
+
             throw new HubException("Failed to remove from group");
         }
 
